@@ -26,6 +26,7 @@ import aiosmtpd.controller
 import email.message
 import email.utils
 import uuid
+import socket
 
 PROBE_FREQUENCY_SECONDS = 60                    # How often do we send an email probe?
 SMTPD_TARGET = "infra-roundtrip@apache.org"     # Who do we send the probe to?
@@ -126,7 +127,9 @@ async def latest_rt_times(request, data: RoundTripData):
             recv = "<span style='color: #A00;'>Roundtrip not completed yet.</span>"
             how_long_ago = "Not received yet"
         else:
-            how_long_ago += f" (via {item[5]})"  # Add sender MTA
+            peer = item[5]
+            naddr = socket.gethostbyaddr(peer)[0]
+            how_long_ago += f" (via {naddr} [{peer}])"  # Add sender MTA
         if item[4]:
             recv = "<span style='color: #A00;'>" + item[4].replace('<', '&lt;') + "</span>"
         tbl += f"<tr><td>{probe_id}</td><td>{how_long_ago}</td><td>{sent}</td><td>{recv}</td><td align='right'>{diff} seconds</td></tr>\n"
