@@ -121,6 +121,8 @@ async def latest_rt_times(request, data: RoundTripData):
             diff = -1
             recv = "<span style='color: #A00;'>Roundtrip not completed yet.</span>"
             how_long_ago = "Not received yet"
+        if item[4]:
+            recv = "<span style='color: #A00;'>" + item[4].replace('<', '&lt;') + "</span>"
         tbl += f"<tr><td>{probe_id}</td><td>{how_long_ago}</td><td>{sent}</td><td>{recv}</td><td align='right'>{diff} seconds</td></tr>\n"
 
     out_html = (
