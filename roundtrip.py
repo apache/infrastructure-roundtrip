@@ -78,6 +78,7 @@ class RoundTripHandler:
                 if item[0] == probe_id:
                     item[2] = now
                     item[3] = diff
+                    item[5] = peer[0]
                     break
         return "250 OK"
 
@@ -100,10 +101,10 @@ async def send_probe(data):
         message.set_content("Sent via infra-roundtrip")
         try:
             await aiosmtplib.send(message, hostname=SMTPD_MX, port=25)
-            data.probes.append([probe_id, int(time.time()), 0, -1, None])
+            data.probes.append([probe_id, int(time.time()), 0, -1, None, None])
         except Exception as e:
             print(f"Sending probe failed: {e}")
-            data.probes.append([probe_id, int(time.time()), 0, -1, str(e)])
+            data.probes.append([probe_id, int(time.time()), 0, -1, str(e), None])
         await asyncio.sleep(PROBE_FREQUENCY_SECONDS)
 
 
@@ -124,6 +125,8 @@ async def latest_rt_times(request, data: RoundTripData):
             diff = -1
             recv = "<span style='color: #A00;'>Roundtrip not completed yet.</span>"
             how_long_ago = "Not received yet"
+        else:
+            how_long_ago += f" (via {item[5]})"  # Add sender MTA
         if item[4]:
             recv = "<span style='color: #A00;'>" + item[4].replace('<', '&lt;') + "</span>"
         tbl += f"<tr><td>{probe_id}</td><td>{how_long_ago}</td><td>{sent}</td><td>{recv}</td><td align='right'>{diff} seconds</td></tr>\n"
