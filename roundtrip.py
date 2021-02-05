@@ -106,7 +106,7 @@ async def send_probe(data):
 
 async def simple_rt_metric(request, data: RoundTripData):
     time_since_last_email = int(time.time() - data.last_email_received)
-    return aiohttp.web.Response(text=str(time_since_last_email))
+    return aiohttp.web.Response(text="seconds:" + str(time_since_last_email))
 
 
 async def latest_rt_times(request, data: RoundTripData):
