@@ -171,7 +171,8 @@ async def latest_rt_times(request, data: RoundTripData):
 def main():
     data = RoundTripData()
     smtpd = aiosmtpd.controller.Controller(RoundTripHandler(data), hostname=SMTPD_HOST, port=SMTPD_PORT)
-    # Run the event loop in a separate thread.
+    # Dual-stack-hack it and start
+    smtpd.hostname = None
     smtpd.start()
     print(f"Started SMTPd on port {SMTPD_PORT}")
 
