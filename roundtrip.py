@@ -24,6 +24,7 @@ import aiosmtplib
 import aiohttp.web
 import aiosmtpd.controller
 import email.message
+import email.utils
 import uuid
 
 PROBE_FREQUENCY_SECONDS = 60                    # How often do we send an email probe?
@@ -92,6 +93,8 @@ async def send_probe(data):
         message = email.message.EmailMessage()
         message["From"] = SMTPD_ME
         message["To"] = SMTPD_TARGET
+        message["Date"] = email.utils.formatdate(localtime=True)
+        message["Message-ID"] = f"<{probe_id}-{SMTPD_ME}"
         message["Subject"] = f"Round Trip Probe, {time.time()}"
         message["X-RoundTrip-Probe"] = f"{probe_id} {now}"
         message.set_content("Sent via infra-roundtrip")
