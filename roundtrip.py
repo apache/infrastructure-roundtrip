@@ -29,6 +29,7 @@ import uuid
 import socket
 
 PROBE_FREQUENCY_SECONDS = 60                    # How often do we send an email probe?
+PROBE_EXPECTED_DELIVERY_TIME = 25               # We expect delivery of email within 25 seconds.
 SMTPD_TARGET = "infra-roundtrip@apache.org"     # Who do we send the probe to?
 SMTPD_MX = "mx1-he-de.apache.org"               # Which MX do we deliver the probe to?
 SMTPD_ME = "roundtrip@roundtrip.apache.org"     # What is our real recipient address? (the one we accept email for)
@@ -116,23 +117,29 @@ async def simple_rt_metric(request, data: RoundTripData):
 
 async def latest_rt_times(request, data: RoundTripData):
     tbl = ""
-    for item in reversed(data.probes[-19:]):
+    for item in reversed(data.probes[-30:]):
         probe_id = item[0]
         how_long_ago = time.strftime("%Hh:%Mm:%Ss ago", time.gmtime(int(time.time() - item[2])))
         sent = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(item[1]))
         recv = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(item[2]))
+        tdclass = "pending"
         diff = item[3]
         if item[2] == 0:
             diff = -1
             recv = "<span style='color: #A00;'>Roundtrip not completed yet.</span>"
             how_long_ago = "Not received yet"
+            if (time.time() - sent) > PROBE_EXPECTED_DELIVERY_TIME:  # Too slow!
+                tdclass = "noshow"
         else:
+            tdclass = "good"
+            if diff > PROBE_EXPECTED_DELIVERY_TIME:  # Too slow!
+                tdclass = "noshow"
             peer = item[5]
             naddr = socket.gethostbyaddr(peer)[0]
             how_long_ago += f" (via {naddr} [{peer}])"  # Add sender MTA
         if item[4]:
             recv = "<span style='color: #A00;'>" + item[4].replace('<', '&lt;') + "</span>"
-        tbl += f"<tr><td>{probe_id}</td><td>{how_long_ago}</td><td>{sent}</td><td>{recv}</td><td align='right'>{diff} seconds</td></tr>\n"
+        tbl += f"<tr class='{tdclass}'><td>{probe_id}</td><td>{how_long_ago}</td><td>{sent}</td><td>{recv}</td><td align='right'>{diff} seconds</td></tr>\n"
 
     out_html = (
         """
@@ -157,6 +164,15 @@ async def latest_rt_times(request, data: RoundTripData):
                 }
                 tr:nth-child(even) {
                 background-color: darkgrey;
+                }
+                tr.noshow:nth-child(even) {
+                background-color: #A005;
+                }
+                tr.noshow:nth-child(odd) {
+                background-color: #F005;
+                }
+                tr.pending {
+                background-color: wheat;
                 }
             </style>
             </head>
