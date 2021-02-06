@@ -27,11 +27,13 @@ import email.message
 import email.utils
 import uuid
 import socket
+import dns.resolver
+import random
+
 
 PROBE_FREQUENCY_SECONDS = 60                    # How often do we send an email probe?
 PROBE_EXPECTED_DELIVERY_TIME = 25               # We expect delivery of email within 25 seconds.
-SMTPD_TARGET = "infra-roundtrip@apache.org"     # Who do we send the probe to?
-SMTPD_MX = "mx1-he-de.apache.org"               # Which MX do we deliver the probe to?
+PROBE_TARGET = "infra-roundtrip@apache.org"     # Who do we send the probe to?
 SMTPD_ME = "roundtrip@roundtrip.apache.org"     # What is our real recipient address? (the one we accept email for)
 SMTPD_HOST = "0.0.0.0"                          # Host to bind SMTPd to
 SMTPD_PORT = 25                                 # SMTPd port
@@ -85,28 +87,44 @@ class RoundTripHandler:
         return "250 OK"
 
 
+def get_mx_address(email):
+    """ Turn an email address into an MX hostname """
+    domain = email.split('@')[1]
+    exchanges = []
+    try:
+        for x in dns.resolver.resolve(domain, 'MX'):
+            exchanges.append(x.exchange.to_text().rstrip('.'))
+    except dns.resolver.NoAnswer:
+        pass
+    if not exchanges:
+        exchanges.append(domain)
+    random.shuffle(exchanges)
+    return exchanges[0]
+
+
 async def send_probe(data):
     while True:
         if len(data.probes) >= 10000:
             data.probes.pop(0)
         probe_id = str(uuid.uuid4())
         now = int(time.time())
-        print(f"Sending probe to {SMTPD_TARGET}")
+        via_mx = get_mx_address(PROBE_TARGET)
+        print(f"Sending probe to {PROBE_TARGET} via {via_mx}...")
 
         message = email.message.EmailMessage()
         message["From"] = SMTPD_ME
-        message["To"] = SMTPD_TARGET
+        message["To"] = PROBE_TARGET
         message["Date"] = email.utils.formatdate(localtime=True)
         message["Message-ID"] = f"<{probe_id}-{SMTPD_ME}"
         message["Subject"] = f"Round Trip Probe, {time.time()}"
         message["X-RoundTrip-Probe"] = f"{probe_id} {now}"
         message.set_content("Sent via infra-roundtrip")
         try:
-            await aiosmtplib.send(message, hostname=SMTPD_MX, port=25)
-            data.probes.append([probe_id, int(time.time()), 0, -1, None, None])
+            await aiosmtplib.send(message, hostname=via_mx, port=25)
+            data.probes.append([probe_id, int(time.time()), 0, -1, None, None, via_mx])
         except Exception as e:
             print(f"Sending probe failed: {e}")
-            data.probes.append([probe_id, int(time.time()), 0, -1, str(e), None])
+            data.probes.append([probe_id, int(time.time()), 0, -1, str(e), None, via_mx])
         await asyncio.sleep(PROBE_FREQUENCY_SECONDS)
 
 
@@ -127,6 +145,7 @@ async def latest_rt_times(request, data: RoundTripData):
         recv = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(item[2]))
         tdclass = "pending"
         diff = item[3]
+        via_mx = item[6]
         if item[2] == 0:
             diff = -1
             recv = "<span style='color: #A00;'>Roundtrip not completed yet.</span>"
@@ -144,7 +163,7 @@ async def latest_rt_times(request, data: RoundTripData):
             how_long_ago += f" (via {naddr} [{peer}])"  # Add sender MTA
         if item[4]:
             recv = "<span style='color: #A00;'>" + item[4].replace('<', '&lt;') + "</span>"
-        tbl += f"<tr class='{tdclass}'><td>{probe_id}</td><td>{how_long_ago}</td><td>{sent}</td><td>{recv}</td><td align='right'>{diff} seconds</td></tr>\n"
+        tbl += f"<tr class='{tdclass}'><td>{probe_id}</td><td>{via_mx}</td><td>{how_long_ago}</td><td>{sent}</td><td>{recv}</td><td align='right'>{diff} seconds</td></tr>\n"
 
     average_wait = "0"
     if num_probes_received > 0:
@@ -202,7 +221,7 @@ async def latest_rt_times(request, data: RoundTripData):
                     """ + """
                 </p>
                 <table>
-                <tr><th>UUID:</th><th>Received:</th><th>Sent:</th><th>Arrived:</th><th>Roundtrip duration:</th></tr>
+                <tr><th>UUID:</th><th>Sent via:</th><th>Received:</th><th>Sent:</th><th>Arrived:</th><th>Roundtrip duration:</th></tr>
                 """
             + tbl
             + """
