@@ -128,7 +128,7 @@ async def latest_rt_times(request, data: RoundTripData):
             diff = -1
             recv = "<span style='color: #A00;'>Roundtrip not completed yet.</span>"
             how_long_ago = "Not received yet"
-            if (time.time() - sent) > PROBE_EXPECTED_DELIVERY_TIME:  # Too slow!
+            if (time.time() - item[1]) > PROBE_EXPECTED_DELIVERY_TIME:  # Too slow!
                 tdclass = "noshow"
         else:
             tdclass = "good"
