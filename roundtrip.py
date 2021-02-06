@@ -117,6 +117,9 @@ async def simple_rt_metric(request, data: RoundTripData):
 
 async def latest_rt_times(request, data: RoundTripData):
     tbl = ""
+    num_probes = min(30, max(1, len(data.probes)))
+    num_probes_received = 0
+    total_wait = 0.0
     for item in reversed(data.probes[-30:]):
         probe_id = item[0]
         how_long_ago = time.strftime("%Hh:%Mm:%Ss ago", time.gmtime(int(time.time() - item[2])))
@@ -131,6 +134,8 @@ async def latest_rt_times(request, data: RoundTripData):
             if (time.time() - item[1]) > PROBE_EXPECTED_DELIVERY_TIME:  # Too slow!
                 tdclass = "noshow"
         else:
+            total_wait += diff * 1.0
+            num_probes_received += 1
             tdclass = "good"
             if diff > PROBE_EXPECTED_DELIVERY_TIME:  # Too slow!
                 tdclass = "slow"
@@ -141,56 +146,66 @@ async def latest_rt_times(request, data: RoundTripData):
             recv = "<span style='color: #A00;'>" + item[4].replace('<', '&lt;') + "</span>"
         tbl += f"<tr class='{tdclass}'><td>{probe_id}</td><td>{how_long_ago}</td><td>{sent}</td><td>{recv}</td><td align='right'>{diff} seconds</td></tr>\n"
 
-    out_html = (
-        """
-        <html>
-            <head>
-            <title>Round Trip Statistics</title>
-            <style type="text/css">
-            table {
-                border-collapse: collapse;
-                 width: 100%;
-                }
+    average_wait = "0"
+    if num_probes_received > 0:
+        average_wait = "%0.2f" % (total_wait / num_probes_received)
 
-                th, td {
-                    border: 1px solid black;
-                 padding: 3px;
-                 text-align: left;
-                 font-family: monospace;
-                }
-                th {
-                background-color: #8842d5;
-                    color: white;
-                }
-                tr:nth-child(even) {
-                background-color: mediumseagreen;
-                }
-                tr:nth-child(odd) {
-                background-color: lightgreen;
-                }
-                tr.noshow:nth-child(even) {
-                background-color: #A005;
-                }
-                tr.noshow:nth-child(odd) {
-                background-color: #F005;
-                }
-                tr.slow:nth-child(even) {
-                background-color: #C705;
-                }
-                tr.slow:nth-child(odd) {
-                background-color: #F905;
-                }
-                tr.pending {
-                background-color: wheat;
-                }
-            </style>
-            </head>
-            <body style='font-family: sans-serif;'>
-            <table>
-            <tr><th>UUID:</th><th>Received:</th><th>Sent:</th><th>Arrived:</th><th>Roundtrip duration:</th></tr>
+    out_html = (
             """
-        + tbl
-        + """
+            <html>
+                <head>
+                <title>Round Trip Statistics</title>
+                <style type="text/css">
+                table {
+                    border-collapse: collapse;
+                     width: 100%;
+                    }
+    
+                    th, td {
+                        border: 1px solid black;
+                     padding: 3px;
+                     text-align: left;
+                     font-family: monospace;
+                    }
+                    th {
+                    background-color: #8842d5;
+                        color: white;
+                    }
+                    tr:nth-child(even) {
+                    background-color: mediumseagreen;
+                    }
+                    tr:nth-child(odd) {
+                    background-color: lightgreen;
+                    }
+                    tr.noshow:nth-child(even) {
+                    background-color: #A005;
+                    }
+                    tr.noshow:nth-child(odd) {
+                    background-color: #F005;
+                    }
+                    tr.slow:nth-child(even) {
+                    background-color: #C705;
+                    }
+                    tr.slow:nth-child(odd) {
+                    background-color: #F905;
+                    }
+                    tr.pending {
+                    background-color: wheat;
+                    }
+                </style>
+                </head>
+                <body style='font-family: sans-serif;'>
+                <h3>Mail Delivery Delay Statistics</h3>
+                <p>""" + f"""
+                    Out of the last {num_probes} probes, {num_probes_received} have returned, 
+                    with an average delivery delay of {average_wait} seconds.
+                    """ + """
+                </p>
+                <table>
+                <tr><th>UUID:</th><th>Received:</th><th>Sent:</th><th>Arrived:</th><th>Roundtrip duration:</th></tr>
+                """
+            + tbl
+            + """
             </table>
             </body>
             </html>
