@@ -133,7 +133,7 @@ async def latest_rt_times(request, data: RoundTripData):
         else:
             tdclass = "good"
             if diff > PROBE_EXPECTED_DELIVERY_TIME:  # Too slow!
-                tdclass = "noshow"
+                tdclass = "slow"
             peer = item[5]
             naddr = socket.gethostbyaddr(peer)[0]
             how_long_ago += f" (via {naddr} [{peer}])"  # Add sender MTA
@@ -163,13 +163,22 @@ async def latest_rt_times(request, data: RoundTripData):
                     color: white;
                 }
                 tr:nth-child(even) {
-                background-color: darkgrey;
+                background-color: mediumseagreen;
+                }
+                tr:nth-child(odd) {
+                background-color: lightgreen;
                 }
                 tr.noshow:nth-child(even) {
                 background-color: #A005;
                 }
                 tr.noshow:nth-child(odd) {
                 background-color: #F005;
+                }
+                tr.slow:nth-child(even) {
+                background-color: #C705;
+                }
+                tr.slow:nth-child(odd) {
+                background-color: #F905;
                 }
                 tr.pending {
                 background-color: wheat;
