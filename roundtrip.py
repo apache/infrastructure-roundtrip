@@ -108,18 +108,18 @@ async def send_probe(data):
             data.probes.pop(0)
         probe_id = str(uuid.uuid4())
         now = int(time.time())
-        via_mx = get_mx_address(PROBE_TARGET)
-        print(f"Sending probe to {PROBE_TARGET} via {via_mx}...")
-
-        message = email.message.EmailMessage()
-        message["From"] = SMTPD_ME
-        message["To"] = PROBE_TARGET
-        message["Date"] = email.utils.formatdate(localtime=True)
-        message["Message-ID"] = f"<{probe_id}-{SMTPD_ME}"
-        message["Subject"] = f"Round Trip Probe, {time.time()}"
-        message["X-RoundTrip-Probe"] = f"{probe_id} {now}"
-        message.set_content("Sent via infra-roundtrip")
+        via_mx = "???"
         try:
+            via_mx = get_mx_address(PROBE_TARGET)
+            print(f"Sending probe to {PROBE_TARGET} via {via_mx}...")
+            message = email.message.EmailMessage()
+            message["From"] = SMTPD_ME
+            message["To"] = PROBE_TARGET
+            message["Date"] = email.utils.formatdate(localtime=True)
+            message["Message-ID"] = f"<{probe_id}-{SMTPD_ME}"
+            message["Subject"] = f"Round Trip Probe, {time.time()}"
+            message["X-RoundTrip-Probe"] = f"{probe_id} {now}"
+            message.set_content("Sent via infra-roundtrip")
             await aiosmtplib.send(message, hostname=via_mx, port=25)
             data.probes.append([probe_id, int(time.time()), 0, -1, None, None, via_mx])
         except Exception as e:
