@@ -71,16 +71,16 @@ class RoundTripHandler:
         self.data.last_email_received = time.time()
 
         # If it's a probe we sent, it has a timestamp in it. If so, log for stats
-        match = re.search(r"^X-RoundTrip-Probe: ([-a-f0-9]{36}) (\d+)", email_as_string, flags=re.MULTILINE)
+        match = re.search(r"^X-RoundTrip-Probe: ([-a-f0-9]{36}) (([0-9]*[.])?[0-9]+)", email_as_string, flags=re.MULTILINE)
         if match:
             probe_id = str(match.group(1))
-            sent = int(match.group(2))
-            now = int(time.time())
-            diff = now - sent
+            sent = float(match.group(2))
+            now = time.time()
+            diff = int( (now - sent) * 1000) / 1000.0
             print(f"Got proper roundtrip probe ({probe_id}) via {peer[0]}, sent {diff} seconds ago.")
             for item in reversed(self.data.probes):
                 if item[0] == probe_id:
-                    item[2] = now
+                    item[2] = int(now)
                     item[3] = diff
                     item[5] = peer[0]
                     break
@@ -160,6 +160,7 @@ async def latest_rt_times(request, data: RoundTripData):
                 tdclass = "slow"
             peer = item[5]
             naddr = socket.gethostbyaddr(peer)[0]
+            diff = "%0.2f" % diff
             how_long_ago += f" (via {naddr} [{peer}])"  # Add sender MTA
         if item[4]:
             recv = "<span style='color: #A00;'>" + item[4].replace('<', '&lt;') + "</span>"
