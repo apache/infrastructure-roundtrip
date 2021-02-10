@@ -29,7 +29,8 @@ import uuid
 import socket
 import dns.resolver
 import random
-
+import ezt
+import collections
 
 PROBE_FREQUENCY_SECONDS = 60                    # How often do we send an email probe?
 PROBE_EXPECTED_DELIVERY_TIME = 25               # We expect delivery of email within 25 seconds.
@@ -40,6 +41,7 @@ SMTPD_PORT = 25                                 # SMTPd port
 WEBAPP_HOST = "0.0.0.0"                         # Socket for web app
 WEBAPP_PORT = 8080                              # Web app port
 
+RESULT_ROW = collections.namedtuple('ResultRow', 'id via how_long_ago sent received duration classname')
 
 # Class for keeping score
 class RoundTripData:
@@ -71,12 +73,13 @@ class RoundTripHandler:
         self.data.last_email_received = time.time()
 
         # If it's a probe we sent, it has a timestamp in it. If so, log for stats
-        match = re.search(r"^X-RoundTrip-Probe: ([-a-f0-9]{36}) (([0-9]*[.])?[0-9]+)", email_as_string, flags=re.MULTILINE)
+        match = re.search(r"^X-RoundTrip-Probe: ([-a-f0-9]{36}) (([0-9]*[.])?[0-9]+)", email_as_string,
+                          flags=re.MULTILINE)
         if match:
             probe_id = str(match.group(1))
             sent = float(match.group(2))
             now = time.time()
-            diff = int( (now - sent) * 1000) / 1000.0
+            diff = int((now - sent) * 1000) / 1000.0
             print(f"Got proper roundtrip probe ({probe_id}) via {peer[0]}, sent {diff} seconds ago.")
             for item in reversed(self.data.probes):
                 if item[0] == probe_id:
@@ -133,11 +136,22 @@ async def simple_rt_metric(request, data: RoundTripData):
     return aiohttp.web.Response(text="seconds:" + str(time_since_last_email))
 
 
+def gen_from_template(template_file: str, data):
+    """ Quick shortcut to ezt with strings """
+    tmpl = ezt.Template(template_file)
+    fp = ezt.StringIO()
+    tmpl.generate(fp, data)
+    return fp.getvalue()
+
+
 async def latest_rt_times(request, data: RoundTripData):
+
     tbl = ""
     num_probes = min(30, max(1, len(data.probes)))
     num_probes_received = 0
     total_wait = 0.0
+    hostname = socket.gethostname()
+    rows = []
     for item in reversed(data.probes[-30:]):
         probe_id = item[0]
         how_long_ago = time.strftime("%Hh:%Mm:%Ss ago", time.gmtime(int(time.time() - item[2])))
@@ -164,73 +178,14 @@ async def latest_rt_times(request, data: RoundTripData):
             how_long_ago += f" (via {naddr} [{peer}])"  # Add sender MTA
         if item[4]:
             recv = "<span style='color: #A00;'>" + item[4].replace('<', '&lt;') + "</span>"
-        tbl += f"<tr class='{tdclass}'><td>{probe_id}</td><td>{via_mx}</td><td>{how_long_ago}</td><td>{sent}</td><td>{recv}</td><td align='right'>{diff} seconds</td></tr>\n"
+        rows.append(RESULT_ROW(probe_id, via_mx, how_long_ago, sent, recv, diff, tdclass, ))
 
     average_wait = "0"
     if num_probes_received > 0:
         average_wait = "%0.2f" % (total_wait / num_probes_received)
 
-    out_html = (
-            """
-            <html>
-                <head>
-                <title>Round Trip Statistics</title>
-                <style type="text/css">
-                table {
-                    border-collapse: collapse;
-                     width: 100%;
-                    }
-    
-                    th, td {
-                        border: 1px solid black;
-                     padding: 3px;
-                     text-align: left;
-                     font-family: monospace;
-                    }
-                    th {
-                    background-color: #8842d5;
-                        color: white;
-                    }
-                    tr:nth-child(even) {
-                    background-color: mediumseagreen;
-                    }
-                    tr:nth-child(odd) {
-                    background-color: lightgreen;
-                    }
-                    tr.noshow:nth-child(even) {
-                    background-color: #A005;
-                    }
-                    tr.noshow:nth-child(odd) {
-                    background-color: #F005;
-                    }
-                    tr.slow:nth-child(even) {
-                    background-color: #C705;
-                    }
-                    tr.slow:nth-child(odd) {
-                    background-color: #F905;
-                    }
-                    tr.pending {
-                    background-color: wheat;
-                    }
-                </style>
-                </head>
-                <body style='font-family: sans-serif;'>
-                <h3>Mail Delivery Delay Statistics</h3>
-                <p>""" + f"""
-                    Out of the last {num_probes} probes, {num_probes_received} have returned, 
-                    with an average delivery delay of {average_wait} seconds.
-                    """ + """
-                </p>
-                <table>
-                <tr><th>UUID:</th><th>Sent via:</th><th>Received:</th><th>Sent:</th><th>Arrived:</th><th>Roundtrip duration:</th></tr>
-                """
-            + tbl
-            + """
-            </table>
-            </body>
-            </html>
-        """
-    )
+    out_html = gen_from_template('template_details.ezt', locals())
+
     return aiohttp.web.Response(content_type="text/html", text=out_html)
 
 
