@@ -1,0 +1,56 @@
+<html>
+<head>
+    <title>Round Trip Statistics for [hostname]</title>
+    <style type="text/css">
+                table {
+                    border-collapse: collapse;
+                     width: 100%;
+                    }
+
+                    th, td {
+                        border: 1px solid black;
+                     padding: 3px;
+                     text-align: left;
+                     font-family: monospace;
+                    }
+                    th {
+                    background-color: #8842d5;
+                        color: white;
+                    }
+                    tr:nth-child(even) {
+                    background-color: mediumseagreen;
+                    }
+                    tr:nth-child(odd) {
+                    background-color: lightgreen;
+                    }
+                    tr.noshow:nth-child(even) {
+                    background-color: #A005;
+                    }
+                    tr.noshow:nth-child(odd) {
+                    background-color: #F005;
+                    }
+                    tr.slow:nth-child(even) {
+                    background-color: #C705;
+                    }
+                    tr.slow:nth-child(odd) {
+                    background-color: #F905;
+                    }
+                    tr.pending {
+                    background-color: wheat;
+                    }
+                </style>
+</head>
+<body style='font-family: sans-serif;'>
+<h3>Mail Delivery Delay Statistics for [hostname]</h3>
+<p>
+    Out of the last [num_probes] probes, [num_probes_received] have returned,
+    with an average delivery delay of [average_wait] seconds.
+</p>
+<table>
+    <tr><th>UUID:</th><th>Sent via:</th><th>Received:</th><th>Sent:</th><th>Arrived:</th><th>Roundtrip duration:</th></tr>
+    [for rows]
+    <tr class="[rows.classname]"><td>[rows.id]</td><td>[rows.via]</td><td>[rows.how_long_ago]</td><td>[rows.sent]</td><td>[rows.received]</td><td align='right'>[rows.duration] seconds</td></tr>
+    [end]
+</table>
+</body>
+</html>
